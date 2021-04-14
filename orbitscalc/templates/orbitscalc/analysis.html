@@ -1,0 +1,1044 @@
+<!--
+Orbitscalc
+Copyright 2021 Hannes Diener
+Licensed under the Apache License, Version 2.0
+-->
+
+<!DOCTYPE html>
+    <html>
+    <head>
+        {% load static %}
+        <title>Auswahl Bodenstationen</title>
+        <!-- Favicon -->
+        <link rel="shortcut icon" type="image/png" href="{% static 'orbitscalc/favicon.ico' %}">
+        <link rel="stylesheet" href="{% static 'orbitscalc/analysis.css' %}">
+    </head>
+    <body>        
+            <!-- Form -->
+            <form method="POST" id="eingabeForm">
+                <div id="grid" class="input-grid">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% comment %} Eingabe {% endcomment %}
+                <div id="input-heading-div" class="tile-div heading-div input-mode">
+                    <div class="heading">
+                    Analyse der Datenübertragung bei Satellitenmissionen
+                    </div>
+                </div>
+                <div id="cesium-div" class="input-cesium-div">
+                    <!-- Cesium -->
+                    <!-- Reihenfolge von Elementen wichtig -->
+                    <script src="https://cesium.com/downloads/cesiumjs/releases/1.67/Build/Cesium/Cesium.js"></script>
+                    <link href="https://cesium.com/downloads/cesiumjs/releases/1.67/Build/Cesium/Widgets/widgets.css" rel="stylesheet"/>
+                    <div id="cesium-container"></div>
+                    <script>
+                        var groundStationsToOperators = {{ display_information.ground_stations_to_operators }}
+                        var operatorsToGroundStations = {{ display_information.operators_to_ground_stations }}
+                        var groundStationToAntennas = {
+                            {% for ground_station in display_information.ground_stations.values %}
+                                {{ground_station.id}}: [
+                                    {% for antenna_id in ground_station.antennas %}{{ antenna_id }}, {% endfor %}
+                                ],
+                            {% endfor %}
+                        }
+                        // Cesium viewer initialiseren
+                        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkODMzZmFkZS03N2JkLTQyNDItYWEyMy1iODIzYmEyNmVmMTMiLCJpZCI6MjQzMDMsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1OTM5MzY1Njh9.IG0qM10aBNfS6TveY4MWidyADmSszXAf__QahfQtsAA';
+                        // clock zur Darstellung der Zeitleiste nur intialisieren, wenn schon Start- und Endzeit festgelegt sind
+                        {% if analysis %}
+                            var cesiumClock = new Cesium.Clock({
+                                startTime: Cesium.JulianDate.fromIso8601("{{ analysis.get_start_time.isoformat }}"),
+                                stopTime: Cesium.JulianDate.fromIso8601("{{ analysis.get_end_time.isoformat }}"),
+                                currentTime : Cesium.JulianDate.fromIso8601("{{ analysis.get_start_time.isoformat }}"),
+                                multiplier: 60,
+                                clockRange: Cesium.ClockRange.LOOP_STOP,
+                                step: Cesium.ClockStep.SYSTEM_CLOCK_MULTIPLIER
+                            })
+                            var clockViewModel = new Cesium.ClockViewModel(cesiumClock)
+                        {% endif %}
+                        var viewer = new Cesium.Viewer(
+                            'cesium-container',
+                            {
+                                // Probleme mit Anzeigen von Icons bei weitem Herauszoomen
+                                /* terrainProvider: Cesium.createWorldTerrain(), */
+                                {% if analysis %} clockViewModel: clockViewModel {% endif %}
+                            }
+                        );
+                        // Zoom limitieren
+                        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 300
+                        viewer.scene.screenSpaceCameraController.enableTilt = false
+                        const PREFIX_GROUND_STATION = "ground_station"
+                        const PREFIX_ANTENNA = "antenna"
+                        const PREFIX_OPERATOR = "operator"
+                        const SATELLITE_ID = "satellite"
+                        // Darstellung der Bodenstationen
+                        {% for ground_station in display_information.ground_stations.values %}
+                            // fuer Bodenstation Cesium Objekt erstellen
+                            var ground_station = new Cesium.Entity({
+                                id: PREFIX_GROUND_STATION + {{ ground_station.id }},
+                                name: "{{ ground_station.name }}",
+                                description: "",
+                                billboard: {
+                                    eyeOffset: new Cesium.Cartesian3(0,0,0),
+                                    horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                                    pixelOffset:new Cesium.Cartesian2(0,0),
+                                    scale: 1.5,
+                                    verticalOrigin:Cesium.VerticalOrigin.CENTER,
+                                    distanceDisplayCondition: new Cesium.DistanceDisplayCondition(5000, Number.MAX_VALUE)
+                                },
+                                label:{
+                                    font:"11pt Lucida Console",
+                                    horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                                    outlineColor: Cesium.Color.BLACK,
+                                    outlineWidth: 2,
+                                    pixelOffset: new Cesium.Cartesian2(12,0),
+                                    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                                    text:"{{ ground_station.name }}",
+                                    verticalOrigin:Cesium.VerticalOrigin.CENTER,
+                                    distanceDisplayCondition: new Cesium.DistanceDisplayCondition(4000, 8000000)
+                                },
+                                position: Cesium.Cartesian3.fromDegrees({{ ground_station.lon }}, {{ ground_station.lat }}),
+                                show: true
+                            });
+                            // Cesium Objekt zu Viewer hinzufuegen
+                            viewer.entities.add(ground_station)
+                            // Jede Antenne display_information
+                            {% for antenna in ground_station.antennas.values %}
+                                // fuer Antenne Cesium Objekt erstellen
+                                var antenna = new Cesium.Entity({
+                                    id: PREFIX_ANTENNA + {{ antenna.id }},
+                                    name:"{{ antenna.name }}",
+                                    description: "",
+                                    billboard:{
+                                        eyeOffset: new Cesium.Cartesian3(0,0,0),
+                                        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                                        pixelOffset:new Cesium.Cartesian2(0,0),
+                                        scale: 1.5,
+                                        verticalOrigin:Cesium.VerticalOrigin.CENTER,
+                                        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4000)
+                                    },
+                                    label:{
+                                        font:"11pt Lucida Console",
+                                        horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                                        outlineColor: Cesium.Color.BLACK,
+                                        outlineWidth: 2,
+                                        pixelOffset: new Cesium.Cartesian2(12,0),
+                                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                                        text:"{{ antenna.name }}",
+                                        verticalOrigin:Cesium.VerticalOrigin.CENTER,
+                                        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4000)
+                                    },
+                                    position: Cesium.Cartesian3.fromDegrees({{ antenna.lon }}, {{ antenna.lat }}),
+                                    show: true
+                                });
+                                // Cesium Objekt zu Viewer hinzufuegen
+                                viewer.entities.add(antenna)
+                            {% endfor %}
+                            // Darstellung initialiseren
+                            changeGroundStationDisplayMode({{ ground_station.id }}, false)
+                        {% endfor %}
+
+                        // Satellitenlaufbahn display_information
+                        var sampledPositionProperty = new Cesium.SampledPositionProperty(Cesium.ReferenceFrame.FIXED, 0)
+                        {% for position in analysis.calculate_satellite_positions %}
+                            sampledPositionProperty.addSample(Cesium.JulianDate.fromIso8601("{{ position.time }}"), Cesium.Cartesian3.fromDegrees({{ position.lon }}, {{ position.lat }}, {{ position.alt }}))
+                        {% endfor %}
+                        var satellite = new Cesium.Entity({
+                            id: SATELLITE_ID,
+                            name: "{{ analysis.get_satellite.get_name }}",
+                            description: "Satellit {{ analysis.get_satellite.get_name }}",
+                            billboard: new Cesium.BillboardGraphics({
+                                image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAADJSURBVDhPnZHRDcMgEEMZjVEYpaNklIzSEfLfD4qNnXAJSFWfhO7w2Zc0Tf9QG2rXrEzSUeZLOGm47WoH95x3Hl3jEgilvDgsOQUTqsNl68ezEwn1vae6lceSEEYvvWNT/Rxc4CXQNGadho1NXoJ+9iaqc2xi2xbt23PJCDIB6TQjOC6Bho/sDy3fBQT8PrVhibU7yBFcEPaRxOoeTwbwByCOYf9VGp1BYI1BA+EeHhmfzKbBoJEQwn1yzUZtyspIQUha85MpkNIXB7GizqDEECsAAAAASUVORK5CYII=",
+                                show: true,
+                                pixelOffset: Cesium.Cartesian2(0, 0),
+                                scale: 1.5
+                            }), 
+                            label: new Cesium.LabelGraphics({
+                                font: "11pt Lucida Console",
+                                show: true,
+                                text: "{{ analysis.get_satellite.get_name }}",
+                                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                                fillColor: Cesium.Color.ORANGE,
+                                verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                                horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                                pixelOffset: new Cesium.Cartesian2(12, 0)
+                            }),
+                            position: sampledPositionProperty,
+                            // position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+                            show: true,
+                            // beim Verfolgen als trackedEntity
+                            viewFrom: new Cesium.Cartesian3(0, 0, 1000000)
+                        })
+                        viewer.entities.add(satellite)
+
+                        // Linien fuer Kontakte
+                        let contact_group;
+                        let group_number = 0;
+                        var positions_satellite = viewer.entities.getById(SATELLITE_ID).position
+                        var ground_station_position;
+                        var visibility_intervals;
+                        {% for ground_station in analysis.get_ground_stations.values %}
+                            {% for contact_group in ground_station.get_contact_groups %}
+                                ground_station_position = viewer.entities.getById(PREFIX_GROUND_STATION + {{ ground_station.retrieve_id }}).position
+                                group_number++;
+                                // intervale definieren, in welchen Kontakt sichtbar ist
+                                visibility_intervals = new Cesium.TimeIntervalCollectionProperty()
+                                visibility_intervals.intervals.addInterval(Cesium.TimeInterval.fromIso8601({
+                                    iso8601: "{{ analysis.get_start_time.isoformat }}/{{ contact_group.get_start_time.isoformat }}",
+                                    isStartIncluded: true,
+                                    isStopIncluded: false,
+                                    data: false
+                                }))
+                                visibility_intervals.intervals.addInterval(Cesium.TimeInterval.fromIso8601({
+                                    iso8601: "{{ contact_group.get_start_time.isoformat }}/{{ contact_group.get_end_time.isoformat }}",
+                                    isStartIncluded: true,
+                                    isStopIncluded: false,
+                                    data: true
+                                }))
+                                visibility_intervals.intervals.addInterval(Cesium.TimeInterval.fromIso8601({
+                                    iso8601: "{{ contact_group.get_end_time.isoformat }}/{{ analysis.get_end_time.isoformat }}",
+                                    isStartIncluded: true,
+                                    isStopIncluded: true,
+                                    data: false
+                                }))
+                                var color_intervals = new Cesium.TimeIntervalCollectionProperty()
+                                {% for interval in contact_group.determine_intervals %}
+                                    color_intervals.intervals.addInterval(Cesium.TimeInterval.fromIso8601({
+                                        iso8601: "{{ interval.get_start_time.isoformat }}/{{ interval.get_end_time.isoformat }}",
+                                        isStartIncluded: true,
+                                        isStopIncluded: false,
+                                        data:
+                                        {% if interval.get_optimal %}
+                                            Cesium.Color.ORANGE
+                                        {% else %}
+                                            Cesium.Color.WHITE
+                                        {% endif %}
+                                    }))
+                                {% endfor %}
+                                // Intervalle zur Beschreibung der Kontakte
+                                var beschreibungintervale = new Cesium.TimeIntervalCollectionProperty()
+                                {% for contact in contact_group.get_contacts %}
+                                    beschreibungintervale.intervals.addInterval(Cesium.TimeInterval.fromIso8601({
+                                        iso8601: "{{ contact.retrieve_start_time.isoformat }}/{{ contact.retrieve_end_time.isoformat }}",
+                                        isStartIncluded: true,
+                                        isStopIncluded: false,
+                                        data: "{{ contact.generate_output_string }}",
+                                    }))
+                                {% endfor %}
+                                // Objekt erstellen
+                                var color = new Cesium.ColorMaterialProperty(color_intervals)
+                                contact_group = new Cesium.Entity({
+                                    id: "contact_group" + group_number,
+                                    name: "Kontakt von {{ analysis.get_satellite.get_name }} mit {{ ground_station.get_name }}",
+                                    description: beschreibungintervale,
+                                    polyline: new Cesium.PolylineGraphics({
+                                        positions: new Cesium.PositionPropertyArray([
+                                            positions_satellite,
+                                            ground_station_position
+                                        ]),
+                                        show: visibility_intervals,
+                                        width: 2,
+                                        material: color,
+                                        arcType: Cesium.ArcType.NONE
+                                    })
+                                })
+                                viewer.entities.add(contact_group)
+                            {% endfor %}
+                        {% endfor %}
+                        
+                        // Bild und Textfarbe einer Bodenstation in Cesium aendern
+                        function changeGroundStationDisplayMode(groundStationID, selected) {
+                            groundStationEntity = viewer.entities.getById(PREFIX_GROUND_STATION + groundStationID)
+                            // Bild und Textfarbe aendern
+                            if (selected) {
+                                groundStationEntity.billboard.image = "{% static 'orbitscalc/bodenstation_aktiv.png' %}"
+                                groundStationEntity.label.fillColor = Cesium.Color.AQUA
+                            } else {
+                                groundStationEntity.billboard.image = "{% static 'orbitscalc/bodenstation_inaktiv.png' %}"
+                                groundStationEntity.label.fillColor = Cesium.Color.WHITE
+                            }
+                            // Darstellung der antennas aendern
+                            let antennas = groundStationToAntennas[groundStationID]
+                            for (a in antennas) {
+                                antennaEntity = viewer.entities.getById(PREFIX_ANTENNA + antennas[a])
+                                if (selected) {
+                                    antennaEntity.billboard.image = "{% static 'orbitscalc/antenne_aktiv.png' %}"
+                                    antennaEntity.label.fillColor = Cesium.Color.AQUA
+                                } else {
+                                    antennaEntity.billboard.image = "{% static 'orbitscalc/antenne_inaktiv.png' %}"
+                                    antennaEntity.label.fillColor = Cesium.Color.WHITE
+                                }
+                            }
+                        }
+
+                        // Alle antennas einer Bodenstation aus- oder abwählen
+                        function selectAntennas(groundStationID, selected) {
+                            let antennas = groundStationToAntennas[groundStationID]
+                            for (a in antennas) {
+                                let antenna_id = antennas[a]
+                                let antennaInput = document.getElementById(PREFIX_ANTENNA + "_" + antenna_id)
+                                antennaInput.checked = selected
+                            }
+                        }
+
+                        // Betreiber einer Bodenstation abhängig von anderen ausgewählten Bodenstationen aus- oder abwählen
+                        function selectOperators(groundStationID, selected) {
+                            let operator = groundStationsToOperators[groundStationID]
+                            let selectedOperators = []
+                            for (o in operator) {
+                                let operator_id = operator[o]
+                                let operatorInput = document.getElementById(PREFIX_OPERATOR + "_" + operator_id)
+                                // prüfen, ob bereits operator dieser Bodenstation gewaehlt sind
+                                if (operatorInput.checked) {
+                                    selectedOperators.push(operator_id)
+                                }
+                            }
+                            // Falls bereits andere operator gewaehlt sind, nur diese an- oder abwaehlen
+                            for (o in selectedOperators) {
+                                let operator_id = operator[o]
+                                if (!selected) {
+                                    checkOperator(operator_id)
+                                }
+                            }
+                            if (selectedOperators.length == 0) {
+                                for (o in operator) {
+                                    let operator_id = operator[o]
+                                    let operatorInput = document.getElementById(PREFIX_OPERATOR + "_" + operator_id)
+                                    if (selected) {
+                                        operatorInput.checked = true
+                                    } else {
+                                        checkOperator(operator_id)
+                                    }
+                                } 
+                            }
+                        }
+
+                        // eine Bodenstation aus- oder abwählen
+                        function selectGroundStations(groundStationID, selected) {
+                            let groundStationInput = document.getElementById(PREFIX_GROUND_STATION + "_" + groundStationID)
+                            groundStationInput.checked = selected
+                            changeGroundStationDisplayMode(groundStationID, selected)
+                        }
+
+                        // gegebenenfalls Aus- und Abwählen von Bodenstationen, wenn operator aus-/abgewählt
+                        function toggleOperator(operatorID) {
+                            // Interaktion Betreiber -> Bodenstationen
+                            let GroundStations = operatorsToGroundStations[operatorID]
+                            let operatorInput = document.getElementById(PREFIX_OPERATOR + "_" + operatorID)
+                            let selected = operatorInput.checked
+                            for (g in GroundStations) {
+                                let groundStationID = GroundStations[g]
+                                if (selected) {
+                                    selectGroundStations(groundStationID, true)
+                                }
+                                checkGroundStationForSelectedOperator(groundStationID)
+                            }
+                        }
+
+                        // Aus-/Abwählen von operator, wenn eine/keine Bodenstation ausgewählt ist
+                        function checkOperator(operatorID) {
+                            let operatorInput = document.getElementById(PREFIX_OPERATOR + "_" + operatorID)
+                            let GroundStations = operatorsToGroundStations[operatorID]
+                            let oneGroundStationIsSelected = false
+                            for (g in GroundStations) {
+                                let groundStationID = GroundStations[g]
+                                let groundStationInput = document.getElementById(PREFIX_GROUND_STATION + "_" + groundStationID)
+                                if (groundStationInput.checked) {
+                                    oneGroundStationIsSelected = true
+                                }
+                            }
+                            operatorInput.checked = oneGroundStationIsSelected
+                        }
+
+                        // Aus-/Abwählen von antennas und Bodenstationen, wenn ein/kein operator ausgewählt ist
+                        function checkGroundStationForSelectedOperator(groundStationID) {
+                            let operator = groundStationsToOperators[groundStationID]
+                            let oneOperatorIsSelected = false
+                            for (o in operator) {
+                                let OperatorID = operator[o]
+                                let operatorInput = document.getElementById(PREFIX_OPERATOR + "_" + OperatorID)
+                                if (operatorInput.checked) {
+                                    oneOperatorIsSelected = true
+                                }
+                            }
+                            selectGroundStations(groundStationID, oneOperatorIsSelected)
+                            selectAntennas(groundStationID, oneOperatorIsSelected)
+                        }
+
+                        // Bodenstationen entsprechend der an- oder abgewaehlten antennas an- oder abwaehlen
+                        function toggleAntennas(groundStationID) {
+                            let groundStationInput = document.getElementById(PREFIX_GROUND_STATION + "_" + groundStationID)
+                            let antennas = groundStationToAntennas[groundStationID]
+                            let oneAntennaSelected = false
+                            for (a in antennas) {
+                                let ant = antennas[a]
+                                let antennaInput = document.getElementById(PREFIX_ANTENNA + "_" + ant)
+                                if (antennaInput.checked) {
+                                    oneAntennaSelected = true
+                                }
+                            }
+                            groundStationInput.checked = oneAntennaSelected
+                            selectOperators(groundStationID, oneAntennaSelected)
+                            
+                        }
+
+                        // Ein- bzw. Ausblenden von antennasliste einer Bodenstation
+                        function toggleAntennasDiv(groundStationID) {
+                            let antennasDiv = document.getElementById("antennas_div_" + groundStationID)
+                            antennasDiv.hidden = !antennasDiv.hidden
+                        }
+
+                        // Liste von Bodenstationen des Betreibers ein- oder ausblenden
+                        function toggleGroundStationsDiv(operatorID) {
+                            let groundStationsDivs = document.getElementsByClassName("ground_stations" + operatorID)
+                            for (d in groundStationsDivs) {
+                                groundStationsDivs[d].hidden = !groundStationsDivs[d].hidden 
+                            }
+                        }
+
+                        // Aus- und Abwählen von operatorn und antennas, wenn Bodenstation aus-/abgewählt
+                        function toggleGroundStation(groundStationID) {
+                            let groundStationInput = document.getElementById(PREFIX_GROUND_STATION + "_" + groundStationID)
+                            let selected = groundStationInput.checked
+                            changeGroundStationDisplayMode(groundStationID, selected)
+                            // Interaktion Bodenstation -> operator
+                            selectOperators(groundStationID, selected)
+                            selectAntennas(groundStationID, selected)
+                        }
+
+                        // zu Bodenstation auf Karte fliegen
+                        function showGroundStation(groundStationID) {
+                            let antennas = groundStationToAntennas[groundStationID]
+                            let antennasEntities = []
+                            for (a in antennas) {
+                                let antenna = viewer.entities.getById(PREFIX_ANTENNA + antennas[a])
+                                antennasEntities.push(antenna)
+                            }
+                            var heading = Cesium.Math.toRadians(0);
+                            var pitch = Cesium.Math.toRadians(90);
+                            var range = -400000.0;
+                            viewer.flyTo(antennasEntities, {offset: new Cesium.HeadingPitchRange(heading, pitch, range)});
+                        }
+
+                        // zu Antenne auf Karte fliegen
+                        function showAntenna(antennas_id) {
+                            let antenna = viewer.entities.getById(PREFIX_ANTENNA + antennas_id)
+                            var heading = Cesium.Math.toRadians(0);
+                            var pitch = Cesium.Math.toRadians(90);
+                            var range = -1000.0;
+                            viewer.flyTo(antenna, {offset: new Cesium.HeadingPitchRange(heading, pitch, range)})
+                        }
+
+                        // Element Anzeigen/Verstecken
+                        function toggleVisibility(element_id) {
+                            element = document.getElementById(element_id)
+                            element.hidden = !element.hidden
+                        }
+
+                        // Zu Satellit fliegen
+                        function showSatellite() {
+                            let satellite = viewer.entities.getById(SATELLITE_ID)
+                            var heading = Cesium.Math.toRadians(0);
+                            var pitch = Cesium.Math.toRadians(90);
+                            var range = -10000000.0;
+                            viewer.flyTo(satellite, {offset: new Cesium.HeadingPitchRange(heading, pitch, range)});
+                        }
+
+                        satelliteIsBeingFollowed = false
+
+                        // Satellit tracken
+                        function followSatellite(button) {
+                            if (satelliteIsBeingFollowed) {
+                                viewer.trackedEntity = null
+                                button.innerHTML = "Satellit verfolgen"
+                                satelliteIsBeingFollowed = false
+                            } else {
+                                viewer.trackedEntity = viewer.entities.getById(SATELLITE_ID)
+                                button.innerHTML = "Verfolgen abbrechen"
+                                satelliteIsBeingFollowed = true
+                            }
+                        }
+
+                        // Bereich zur Eingabe eines individuellen Zeitraums der Datenmenge ein-/ausblenden
+                        function changeTimeInputStyle() {
+                            let timeInputStyleInput = document.getElementById("{{ form.time_input_style.id_for_label }}")
+                            let customTimeDiv = document.getElementById("custom-time-div")
+                            if (timeInputStyleInput.value == "Custom") {
+                                customTimeDiv.style.display = "block"
+                            } else {
+                                customTimeDiv.style.display = "none"
+                            }
+                        }
+
+                        // Kontaktfolge von Bodenstation in Auswertung anzeigen/ausblenden
+                        function toggleAdditionalInformation(id) {
+                            element = document.getElementById("additional-information" + id)
+                            if (element.style.display != "none") {
+                                element.style.display = "none"
+                            } else {
+                                element.style.display = ""
+                            }
+                        }
+
+                        // optimale Kontaktfolge bei Analysemodus "alle" ein- oder ausblenden
+                        function toggleContactsAll(icon) {
+                            element = document.getElementById("contacts-all")
+                            if (element.style.display != "none") {
+                                element.style.display = "none"
+                                icon.src = "{% static 'orbitscalc/plus.png' %}"
+                            } else {
+                                element.style.display = ""
+                                icon.src = "{% static 'orbitscalc/minus.png' %}"
+                            }
+                        }
+
+                        // Eintragen von Daten zum schnellen testen der Anwendung
+                        function enterTestData() {
+                            let tle = "ISS (ZARYA)             \n1 25544U 98067A   20196.81549769 -.00000199  00000-0  44991-5 0  9999\n2 25544  51.6443 211.7288 0001419 115.0512 224.2366 15.49514614236291"
+                            
+                            let tleInput = document.getElementById("{{ form.tle.id_for_label }}")
+                            tleInput.value = tle
+
+                            let minFInput = document.getElementById("{{ form.minimum_frequency.id_for_label }}")
+                            minFInput.value = 10
+
+                            let maxFInput = document.getElementById("{{ form.maximum_frequency.id_for_label }}")
+                            maxFInput.value = 100
+
+                            let unitMinInput = document.getElementById("{{ form.minimum_frequency_unit.id_for_label }}")
+                            unitMinInput.value = 9
+
+                            let unitMaxInput = document.getElementById("{{ form.maximum_frequency_unit.id_for_label }}")
+                            unitMaxInput.value = 9
+
+                            let startTimeDateInput = document.getElementById("id_start_time_0")
+                            startTimeDateInput.value = "2020-09-03"
+
+                            let startTimeTimeInput = document.getElementById("id_start_time_1")
+                            startTimeTimeInput.value = "12:00"
+
+                            let endTimeDateInput = document.getElementById("id_end_time_0")
+                            endTimeDateInput.value = "2020-09-04"
+
+                            let endTimeTimeInput = document.getElementById("id_end_time_1")
+                            endTimeTimeInput.value = "12:00"
+
+                            let dataInput = document.getElementById("{{ form.data.id_for_label }}")
+                            dataInput.value = 10
+
+                            let unitDataInput = document.getElementById("{{ form.data_unit.id_for_label }}")
+                            unitDataInput.value = "8000000.0"
+
+                            let eirpInput = document.getElementById("{{ form.eirp.id_for_label }}")
+                            eirpInput.value = 200
+                        }
+
+                        // zur Datenbank auf Adminseite weiterleiten
+                        function forwardToAdminPage() {
+                            window.location.href = "{% url 'admin:index' %}";   
+                        }
+
+                        // Anleitung anzeigen/ausblenden und Cesium ausblenden/anzeigen
+                        function showInstructions(button) {
+                            let instructionsElement = document.getElementById("instructions-div")
+                            let cesiumElement = document.getElementById("cesium-div")
+                            if (instructionsElement.style.visibility == "hidden") {
+                                instructionsElement.style.visibility = "visible"
+                                cesiumElement.style.visibility = "hidden"
+                                button.innerHTML = "Anleitung ausblenden"
+                            } else {
+                                instructionsElement.style.visibility = "hidden"
+                                cesiumElement.style.visibility = "visible"
+                                button.innerHTML = "Anleitung anzeigen"
+                            }
+                        }
+
+                        function loadingAnimation(button) {
+                            button.innerHTML = "lädt..."
+                        }
+
+                        function toggleDisplayMode(button=false) {
+                            inputElements = document.getElementsByClassName("input-mode")
+                            outputElements = document.getElementsByClassName("output-mode")
+                            cesiumElement = document.getElementById("cesium-div")
+                            displayModeElement = document.getElementById("display-mode-div")
+                            gridElement = document.getElementById("grid")
+                            if (resultAvailable) {
+                                if (displayMode == "input-mode") {
+                                    // von Eingabe zu Ausgabe umschalten
+                                    for (let i = 0; i < inputElements.length; i++) {
+                                        element = inputElements[i]
+                                        element.style.display = "none"
+                                    }
+                                    for (let i = 0; i < outputElements.length; i++) {
+                                        outputElements[i].style.display = ""
+                                    }
+                                    gridElement.classList.remove("input-grid")
+                                    gridElement.classList.add("output-grid")
+                                    cesiumElement.classList.remove("input-cesium-div")
+                                    cesiumElement.classList.add("output-cesium-div")
+                                    displayModeElement.classList.remove("input-display-mode-div")
+                                    displayModeElement.classList.add("output-display-mode-div")
+                                    displayMode = "output-mode"
+                                    if (button) {
+                                        button.innerHTML = "Eingabebereich anzeigen"
+                                    }
+                                } else if (displayMode == "output-mode") {
+                                    // von Ausgabe zu Eingabe umschalten
+                                    for (let i = 0; i < inputElements.length; i++) {
+                                        element = inputElements[i]
+                                        element.style.display = ""
+                                    }
+                                    for (let i = 0; i < outputElements.length; i++) {
+                                        outputElements[i].style.display = "none"
+                                    }
+                                    gridElement.classList.remove("output-grid")
+                                    gridElement.classList.add("input-grid")
+                                    cesiumElement.classList.remove("output-cesium-div")
+                                    cesiumElement.classList.add("input-cesium-div")
+                                    displayModeElement.classList.remove("output-display-mode-div")
+                                    displayModeElement.classList.add("input-display-mode-div")
+                                    displayMode = "input-mode"
+                                    if (button) {
+                                        button.innerHTML = "Ausgabebereich anzeigen"
+                                    }
+                                }
+                            }
+                        }
+
+                        // Ausführen beim Starten der Anwendung
+                        function initialise() {
+                            changeTimeInputStyle();
+                            resultAvailable = false
+                            displayMode = "input-mode"
+                            testDataElement = document.getElementById("test-data-div")
+                            displayModeElement = document.getElementById("display-mode-div")
+                            displayModeElement.style.display = "none"
+                            {% if display_mode == "no_antennas_selected" %}
+                                alert("Es wurden keine antennas ausgewählt. Es wird nur der Orbit des Satelliten dargestellt.")
+                            {% elif display_mode == "result" %}
+                                resultAvailable = true
+                                displayModeElement.style.display = ""
+                                testDataElement.style.display = "none"
+                            {% endif %}
+                            toggleDisplayMode()
+                            showSatellite()
+                        }
+
+                        window.onload = initialise
+                    </script>
+                </div>
+                <div id="operators-div" class="tile-div input-mode">
+                    <!-- operatorauswahl -->
+                    <h3>Betreiber</h3>
+                    <div class="auswahlliste">
+                        {% for operator in display_information.operators.values %}
+                            <div class="flexwrapper">
+                                <div class="flex-static checkbox-div">
+                                    <input class="checkbox" name="_operator_{{operator.id}}" type="checkbox" id="operator_{{operator.id}}" value="{{operator.id}}" onclick="toggleOperator({{operator.id}});"
+                                        {% if operator.selected %}
+                                            checked
+                                        {% endif %}
+                                    />
+                                    <span class="checkmark"></span>
+                                </div>
+                                <div class="flex-dynamic checkbox-text">
+                                    {{operator.name}}
+                                </div>
+                                <div class="flex-static tooltip">
+                                    <img class="icon" onclick="toggleGroundStationsDiv({{operator.id}});" src="{% static 'orbitscalc/bodenstation_icon.png' %}"/>
+                                    <span class="tooltiptext-right">Bodenstationen des Betreibers anzeigen/ausblenden</span>
+                                </div>
+                            </div>
+                            <ul class="ground_stations{{operator.id}}" hidden="true">
+                                {% for ground_station in operator.ground_stations %}
+                                    <li>
+                                        - {{ ground_station.name }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div id="ground-stations-div" class="tile-div input-mode">
+                    <!-- Bodenstationsauswahl -->
+                    <h3>Bodenstationen</h3>
+                    <div class="select-list">
+                        {% for ground_station in display_information.ground_stations.values %}
+                            <div class="flexwrapper">
+                                {% comment %} Checkbox zur Auswahl der Bodenstation {% endcomment %}
+                                <div class="flex-static checkbox-div">
+                                    <input 
+                                        class="checkbox"
+                                        name="_ground_station_{{ground_station.id}}" 
+                                        type="checkbox" 
+                                        id="ground_station_{{ground_station.id}}" 
+                                        value="{{ground_station.id}}" 
+                                        onclick="toggleGroundStation({{ground_station.id}}, false);"
+                                        {% if ground_station.selected %}
+                                            checked
+                                        {% endif %}
+                                    >
+                                    <span class="checkmark"></span>
+                                    {% if ground_station.selected %}
+                                        <script>
+                                            changeGroundStationDisplayMode({{ ground_station.id }}, true)
+                                        </script>
+                                    {% endif %}
+                                </div>
+                                {% comment %} Name der Bodenstation {% endcomment %}
+                                <div class="flex-dynamic checkbox-text">
+                                    {{ground_station.name}}
+                                </div>
+                                {% comment %} Click --> antennas Anzeigen {% endcomment %}
+                                <div class="flex-static tooltip">
+                                    <img class="icon" onclick="toggleAntennasDiv({{ground_station.id}});" src="{% static 'orbitscalc/antenne_icon.png' %}"/>
+                                    <span class="tooltiptext-right">Antennen der Bodenstation anzeigen/ausblenden</span>
+                                </div>
+                                {% comment %} Click auf Icon --> Fliegen zu Bodenstation {% endcomment %}
+                                <div class="flex-static tooltip">
+                                    <img class="icon" onclick="showGroundStation({{ground_station.id}})" src="{% static 'orbitscalc/location_pin.png' %}"/>
+                                    <span class="tooltiptext-right">Bodenstation auf Karte zeigen</span>
+                                </div>
+                            </div>
+                            <div id="antennas_div_{{ground_station.id}}" hidden="true">
+                                {% for antenna in ground_station.antennas.values %}
+                                    <div class="flexwrapper" style="margin-left:1rem;">
+                                        <div class="flex-static checkbox-div">
+                                            <input type="checkbox" 
+                                            id="antenna_{{antenna.id}}" 
+                                            value="{{antenna.id}}" 
+                                            name="_antenna_{{antenna.id}}" 
+                                            onclick="toggleAntennas({{ground_station.id}});"
+                                                {% if antenna.selected %}
+                                                    checked
+                                                {% endif %}
+                                            >
+                                            <span class="checkmark"></span>
+                                        </div>
+                                        <div class="flex-dynamic checkbox-text">{{antenna.name}}</div>
+                                        <div class="flex-static tooltip">
+                                        {% comment %} auf Karte zeigen {% endcomment %}
+                                            <img class="icon" onclick="showAntenna({{antenna.id}})" src="{% static 'orbitscalc/location_pin.png' %}"/>
+                                            <span class="tooltiptext-right">Antenne auf Karte zeigen</span>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div id=satellite-div class="tile-div input-mode">
+                    {% comment %} Satellitendaten {% endcomment %}
+                    <h3>Satellitendaten</h3>
+                    <div id="satellite-div">
+                        <!-- TLE -->
+                        <div class="fieldWrapper input-group">
+                            {{ form.tle.errors }}
+                            <label for="{{ form.tle.id_for_label }}">Two Line Element Set</label><br>
+                            {{ form.tle }}
+                        </div>
+                        <!-- EIRP -->
+                        <div class="fieldWrapper input-group">
+                            {{ form.eirp.errors }}
+                            <label for="{{ form.EIRP.id_for_label }}" class="tooltip">
+                                EIRP<span class="tooltiptext-right">Äquivalente isotropische<br>Strahlungsleistung<br>der Antenne des Satelliten</span>
+                            </label><br>
+                            {{ form.eirp }} {{ form.eirp_unit }}
+                            {{ form.eirp_unit.errors }}
+                        </div>
+                        <div class="fieldWrapper input-group">
+                            <table>
+                                <tr>
+                                    <td></td>
+                                    <td>Downlinkfrequenzen</td>
+                                </tr>
+                                <tr>
+                                    <td>Von</td>
+                                    <td>{{ form.minimum_frequency }}</td>
+                                    <td>{{ form.minimum_frequency_unit }}</td>
+                                </tr>
+                                <tr>
+                                    <td>bis</td>
+                                    <td>{{ form.maximum_frequency }}</td>
+                                    <td>{{ form.maximum_frequency_unit }}</td>
+                                </tr>
+                            </table>
+                            {{ form.minimum_frequency.errors }}
+                            {{ form.maximum_frequency.errors }}
+                            {{ form.minimum_frequency_unit.errors }}
+                            {{ form.maximum_frequency_unit.errors }}
+                        </div>
+                    </div>
+                </div>
+                {% comment %} Zeitraum {% endcomment %}
+                <div id="time-div" class="tile-div input-mode">
+                    <h3>Zeitraum</h3>
+                    <div id="zeitraumDiv">
+                        gesamter Analysezeitraum (UTC)
+                        <!-- Startzeit -->
+                        <table class="input-group">
+                            <tr>
+                                <div class="fieldWrapper">
+                                    {{ form.start_time.errors }}
+                                    <td><label for="{{ form.start_time.id_for_label }}">Startzeit</label></td>
+                                    <td class="one-line">{{ form.start_time }}</td>
+                                </div>
+                            </tr>
+                            <tr>
+                                <!-- Endzeit -->
+                                <div class="fieldWrapper">
+                                    {{ form.end_time.errors }}
+                                    <td><label for="{{ form.end_time.id_for_label }}">Endzeit</label></td>
+                                    <td class="one-line">{{ form.end_time }}</td>
+                                </div>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                {% comment %} Datenübertragung {% endcomment %}
+                <div id="data-div" class="tile-div input-mode">
+                    <h3>Datenübertragung</h3>
+                    <div id="datenuebertragungDiv">
+                        <div class="input-group">
+                            <!-- Datenmenge -->
+                            <div>                           
+                                angestrebte Datenübertragungsmenge
+                            </div>
+                            <div class="fieldWrapper one-line">
+                                {{ form.data.errors }}
+                                {{ form.data }}
+                                {{ form.data_unit.errors }}
+                                {{ form.data_unit }}
+                            </div>
+                            <div class="fieldWrapper one-line">
+                                pro
+                                <!-- Zeitraum Modus -->
+                                {{ form.time_input_style.errors }}
+                                {{ form.time_input_style }}
+                            </div>
+                        </div>
+                        <div id="custom-time-div" class="fieldWrapper input-group" style="display:none;">
+                            <div class="one-line">{{ form.time_days }}Tage</div>
+                            {{ form.time_days.errors }}
+                            <div class="one-line">{{ form.time_hours }}Stunden</div>
+                            {{ form.time_hours.errors }}
+                            <div class="one-line">{{ form.time_minutes }}Minuten</div>
+                            {{ form.time_minutes.errors }}
+                        </div>
+                        <!-- Analysemodus -->
+                        <div class="fieldWrapper input-group">
+                            {{ form.mode.errors }}
+                            <td><label for="{{ form.mode.id_for_label }}">Betrachtung von</label></td>
+                            <td>{{ form.mode }}</td>
+                        </div>
+                    </div>
+                </div>
+                <div id="help-button-div" class="button-div input-mode">
+                    <button type="button" class="input-button" onclick="showInstructions(this)">Anleitung anzeigen</button>
+                </div>
+                <div id="test-data-div" class="button-div input-mode">
+                    <button type="button" class="input-button" onclick="enterTestData()">Testdaten eintragen</button>
+                </div>
+                <div id="submit-div" class="button-div input-mode">
+                    <button type="submit" class="input-button" id="absenden-button" onclick="loadingAnimation(this)">analysieren</button>
+                </div>
+                <div id="admin-div" class="button-div input-mode">
+                    <button type="button" class="input-button" onclick="forwardToAdminPage()">zur Datenbank</button>
+                </div>
+                <div id="instructions-div" class="tile-div input-mode" style="visibility:hidden;">
+                    Hier kann eine Anleitung stehen.
+                </div>
+                {% comment %} display-mode button - immer sichtbar wenn Ergebnis vorliegt {% endcomment %}
+                <div id="display-mode-div" class="button-div input-display-mode-div" style="display:none;">
+                    <button type="button" class="input-button" onclick="toggleDisplayMode(this)">Eingabebereich anzeigen</button>
+                </div>
+                {% comment %} Ausgabe {% endcomment %}
+                <div id="output-heading-div" class="tile-div heading-div output-mode" style="display:none;">
+                    <div class="heading">
+                        Analyse der Datenübertragung bei Satellitenmissionen
+                    </div>
+                </div>
+                <div id="follow-button-div" class="button-div output-mode" style="display:none;">
+                    <button type="button" class="input-button" onclick="followSatellite(this)">Satelliten verfolgen</button>
+                </div>
+                <div id="result-div" class="tile-div output-mode" style="display:none;">
+                    {% if analysis.get_mode.name == All %} insgesamt {% endif %}
+                    {% if analysis.get_mode.name != JustOrbits %} angestrebte Datenübertragungsmenge:<br>{{ analysis.retrieve_target_data_with_unit }} {% endif %}
+                    {% if analysis.get_mode.name == Antennas %} über eine Antenne {% endif %}
+                    {% if analysis.get_mode.name == Operators %} über einen Betreiber {% endif %}
+                    {% if analysis.get_mode.name == GroundStations %} über eine Bodenstation {% endif %}
+                    {% comment %} antennas {% endcomment %}
+                    {% if analysis.get_mode.name == Antennas %}
+                        <div id="result-list">
+                            {% for ground_station in analysis.get_results %}
+                                <div class="result-group">
+                                    <div class="flexwrapper">
+                                        {% comment %} Name der Bodenstation {% endcomment %}
+                                        <div class="flex-dynamic">
+                                            <b>{{ ground_station.get_name }}</b>
+                                        </div>
+                                        {% comment %} Click auf Icon --> Fliegen zu Bodenstation {% endcomment %}
+                                        <div class="flex-static">
+                                            <img 
+                                                class="icon" 
+                                                onclick="showGroundStation({{ ground_station.retrieve_id }})" 
+                                                src="{% static 'orbitscalc/location_pin.png' %}"
+                                            />
+                                        </div>
+                                    </div>
+                                    {% for antenna in ground_station.get_antennas %}
+                                        <div class="flexwrapper result-ant-ant">
+                                            <div class="flex-dynamic result-name" style="word-break:unset;word-wrap:unset;">{{ antenna.get_name }}</div>
+                                            <div class="data-bar flex-static">
+                                                <div class="bar-text {% if antenna.determine_sufficient %}accent-text{% endif %}">{{ antenna.retrieve_data_with_unit }}</div>
+                                                <div class="bar-share" style="width:{{ antenna.retrieve_share_percentage }}%;"></div>
+                                            </div>
+                                            {% comment %} Bei Click Kontakte anzeigen {% endcomment %}
+                                            <div class="flex-static">
+                                                <img class="icon" onclick="toggleAdditionalInformation({{ antenna.retrieve_id }})" src="{% static 'orbitscalc/more.png' %}"/>
+                                            </div>  
+                                            {% comment %} Click auf Icon --> Fliegen zu Antenne {% endcomment %}
+                                            <div class="flex-static">
+                                                <img class="icon" onclick="showAntenna({{ antenna.retrieve_id }})" src="{% static 'orbitscalc/location_pin.png' %}"/>
+                                            </div>
+                                        </div>
+                                        {% comment %} Kontakte anzeigen {% endcomment %}
+                                        <div id="additional-information{{ antenna.retrieve_id }}" class="additional-information-div" style="display:none;">
+                                            {% if antenna.get_contact_sequence.retrieve_data %}
+                                                <b>Kontakte:</b><br>
+                                                {% for contact in antenna.get_contact_sequence.get_contacts %}
+                                                    {% if contact.get_data > 0 %}
+                                                        {{ contact.generate_output_string }} <br>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                {% comment %}TODO: Möglichkeit betrachten, dass zwar Kontakte, aber keine Daten übertragen wurden {% endcomment %}
+                                                Es liegen keine Kontakte vor.
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% comment %} Bodenstationen {% endcomment %}
+                    {% if analysis.get_mode.name == GroundStations %}
+                        <div id="result-list">
+                            {% for ground_station in analysis.get_results %}
+                                <div class="result-group">
+                                    <div class="flexwrapper">
+                                        {% comment %} Name der Bodenstation {% endcomment %}
+                                        <div class="flex-dynamic result-name">
+                                            <b>{{ ground_station.get_name }}</b>
+                                        </div>
+                                        {% comment %} Balken zur Anzeige der übertragbaren Datenmenge anteilig von der angestrebten {% endcomment %}
+                                        <div class="data-bar flex-static">
+                                            <div class="bar-text {% if ground_station.retrieve_sufficient %}accent-text{% endif %}">{{ ground_station.retrieve_data_with_unit }}</div>
+                                            <div class="bar-share" style="width:{{ ground_station.retrieve_share_percentage }}%;"></div>
+                                        </div>
+                                        {% comment %} Click auf Icon --> Fliegen zu Bodenstation {% endcomment %}
+                                        <div class="flex-static">
+                                            <img class="icon" onclick="showGroundStation({{ ground_station.retrieve_id }})" src="{% static 'orbitscalc/location_pin.png' %}"/>
+                                        </div>
+                                        {% comment %} Bei Click Kontaktfolge anzeigen {% endcomment %}
+                                        <div class="flex-static">
+                                            <img class="icon" onclick="toggleAdditionalInformation({{ ground_station.retrieve_id }})" src="{% static 'orbitscalc/more.png' %}"/>
+                                        </div>   
+                                    </div>
+                                    {% comment %} Kontaktfolge {% endcomment %}
+                                    <div id="additional-information{{ ground_station.retrieve_id }}" class="additional-information-div" style="display:none;">
+                                        {% if ground_station.get_best_contact_sequence.get_contacts %}
+                                            <b>Optimale Abfolge von Kontakten:</b><br>
+                                            {% for contact in ground_station.get_best_contact_sequence.get_contacts %}
+                                                {{ contact.generate_output_string }} <br>
+                                            {% endfor %}
+                                        {% else %}
+                                            Es liegen keine Kontakte vor.
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if analysis.get_mode.name == Operators %}
+                        <div id="result-list">
+                            {% for operator in analysis.get_results %}
+                                <div class="result-group">
+                                    <div class="flexwrapper">
+                                        {% comment %} Name der Bodenstation {% endcomment %}
+                                        <div class="flex-dynamic result-name">
+                                            <b>{{ operator.name }}</b>
+                                        </div>
+                                        {% comment %} Balken zur Anzeige der übertragbaren Datenmenge anteilig von der angestrebten {% endcomment %}
+                                        <div class="data-bar flex-static">
+                                            <div class="bar-text {% if operator.sufficient %}accent-text{% endif %}">{{ operator.data_with_unit }}</div>
+                                            <div class="bar-share" style="width:{{ operator.share_percentage }}%;"></div>
+                                        </div>
+                                        {% comment %} Click auf Icon --> Bodenstationen des Betreibers anzeigen {% endcomment %}
+                                        <div class="flex-static">
+                                            <img class="icon" onclick="toggleGroundStationsDiv({{ operator.id }})" src="{% static 'orbitscalc/bodenstation_icon.png' %}"/>
+                                        </div>
+                                        {% comment %} Bei Click Kontaktfolge anzeigen {% endcomment %}
+                                        <div class="flex-static">
+                                            <img class="icon" onclick="toggleAdditionalInformation({{ operator.id }})" src="{% static 'orbitscalc/more.png' %}"/>
+                                        </div>   
+                                    </div>
+                                    {% comment %} ausgewählte Bodenstationen {% endcomment %}
+                                    <div class="additional-information-div ground_stations{{ operator.id }}" hidden>
+                                        <b>ausgewählte Bodenstationen:</b><br>
+                                        {% for ground_station in operator.selected_ground_stations %}
+                                            - {{ ground_station.get_name}}<br>
+                                        {% endfor %}
+                                    </div>
+                                    {% comment %} Kontaktfolge {% endcomment %}
+                                    <div id="additional-information{{ operator.id }}" class="additional-information-div" style="display:none;">
+                                        {% if operator.best_contact_sequence.get_contacts %}
+                                            <b>Optimale Abfolge von Kontakten:</b><br>
+                                            {% for contact in operator.best_contact_sequence.get_contacts %}
+                                                {{ contact.generate_output_string_with_ground_station_name }} <br>
+                                            {% endfor %}
+                                        {% else %}
+                                            Es liegen keine Kontakte vor.
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if analysis.get_mode.name == All %}
+                        <div id="result-list">
+                            <div class="result-group">
+                                {% comment %} Balken zur Anzeige der übertragbaren Datenmenge anteilig von der angestrebten {% endcomment %}
+                                <div class="data-bar" style="width:100%;">
+                                    <div class="bar-text {% if analysis.get_results.sufficient %}accent-text{% endif %}" style="width:100%;">{{ analysis.get_results.data_with_unit }}</div>
+                                    <div class="bar-share" style="width:{{ analysis.get_results.share_percentage }}%;"></div>
+                                </div>
+                                {% comment %} Kontaktfolge {% endcomment %}
+                                <div class="additional-information-div" style="position:relative;display:inline-block;">
+                                    <img
+                                        onclick="toggleContactsAll(this)" 
+                                        type="icon" 
+                                        style="position:absolute;z-index:1;right:1rem;" 
+                                        src="{% static 'orbitscalc/minus.png' %}"
+                                    />
+                                    <div style="position:relative;display:inline-block;">
+                                        <b style="margin-right: 2rem;">Optimale Abfolge von Kontakten:</b><br>
+                                        <div id="contacts-all">
+                                            {% if analysis.get_results.best_contact_sequence.get_contacts %}
+                                                {% for contact in analysis.get_results.best_contact_sequence.get_contacts %}
+                                                    {{ contact.generate_output_string_with_ground_station_name }} <br>
+                                                {% endfor %}
+                                            {% else %}
+                                                Es liegen keine Kontakte vor.
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </body>
+</html>

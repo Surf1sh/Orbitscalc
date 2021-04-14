@@ -1,0 +1,436 @@
+/*
+Orbitscalc
+Copyright 2021 Hannes Diener
+Licensed under the Apache License, Version 2.0
+*/
+
+:root {
+    --farbe1: #D8DBE0;
+    --farbe2: #44686d;
+    --akzentfarbe1: #ffc800;
+    --hg-farbe: #FFFFFF;
+}
+
+/* Django Fehler */
+.classlist {
+    color: red;
+}
+
+body {
+    font-family: FrutigerLTW02-65Bold,"Helvetica Neue",Helvetica,Roboto,Arial,sans-serif;
+    font-size: 1rem;
+    background-color: var(--hg-farbe);
+}
+
+input {
+    background-color: var(--hg-farbe);
+    border: none;
+    box-shadow: none;
+    border-radius: 0.5rem;
+    padding: 0.2rem;
+}
+
+textarea {
+    background-color: var(--hg-farbe);
+    border: none;
+    box-shadow: none;
+    border-radius: 0.5rem;
+    padding: 0.2rem;
+}
+
+
+
+h1 {
+    margin: 0;
+    color: var(--farbe2);
+}
+
+h3 {
+    margin: 0;
+    margin-bottom: 0.5rem;
+    color: var(--farbe2);
+}
+
+ul {
+    margin: 0;
+}
+
+/* zusammengehörige Gruppe von Inputs bzw. Text, anordnen in Zeile oder Spalte nach verfügbarem Platz */
+.input-group {
+    margin: 1rem;
+    display: inline-block;
+    vertical-align: top;
+}
+
+/* Auswählen der Bodenstationen bzw. Betreiber */
+.select-list {
+    max-height: 30rem;
+    overflow-y: auto;
+    padding-left: 0;
+    white-space: nowrap;
+    width: 14rem;  
+}
+
+ul {
+    list-style-type: none;
+}
+
+/* Gitter für Eingabe */
+.input-grid {
+    display: grid;
+    grid-template-columns: min-content 1fr min-content min-content;
+    grid-gap: 0rem;
+    grid-template-rows: repeat(4, min-content);
+}
+
+#cesium-div {
+    margin: 1rem;
+    margin-bottom: 0rem;
+}
+
+.input-cesium-div {
+    grid-column-start: 2;
+    grid-row-start: 2;
+    grid-row-end: 5;
+    grid-column-end: 3;
+}
+
+#cesium-container {
+    height: 97.5%;
+    max-height: 85vh;
+}
+
+#operators-div {
+    align-items: center;
+    grid-row-start: 1;
+    grid-row-end: 3;
+    grid-column: 1;
+}
+
+#ground-stations-div {
+    grid-row-start: 3;
+    grid-row-end: 5;
+    grid-column: 1;
+}
+
+#satellite-div {
+    grid-column-start: 1;
+    grid-column-end: 3;
+    grid-row-start: 5;
+    grid-row-end: 6;
+}
+
+#time-div {
+    grid-column-start: 3;
+    grid-column-end: 5;
+    grid-row-start: 3;
+    grid-row-end: 4;
+}
+
+#data-div {
+    grid-column-start: 3;
+    grid-column-end: 5;
+    grid-row-start: 4;
+    grid-row-end: 5;
+}
+
+#submit-div {
+    grid-column-start: 3;
+    grid-column-end: 5;
+    grid-row: 5;
+}
+
+#help-button-div {
+    grid-column-start: 3;
+    grid-column-end: 5;
+    grid-row: 2;
+}
+
+#test-data-div {
+    grid-column: 4;
+    grid-row: 1;
+}
+
+#admin-div {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+#input-heading-div {
+    grid-column-start: 2;
+    grid-column-end: 3;
+    grid-row: 1;
+}
+
+.heading-div {
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+#instructions-div {
+    grid-column-start: 2;
+    grid-row-start: 2;
+    grid-row-end: 5;
+    grid-column-end: 3;
+}
+
+.tile-div {
+    margin: 0.75rem;
+    padding: 1rem;
+    background-color: var(--farbe1);
+    border-radius: 0.5rem;
+}
+
+.button-div {
+    margin: 0.75rem;
+    padding: 0rem;
+    background-color: var(--farbe2);
+    border-radius: 0.5rem;
+}
+
+.input-button {
+    width: 100%;
+    height: 100%;
+    font-size: 1rem;
+    background-color: transparent;
+    border: none;
+    color: var(--hg-farbe);
+}
+
+.heading {
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+    width: 100%;
+}
+
+#submit-button {
+    font-weight: bold;
+}
+
+.input-display-mode-div {
+    grid-column: 4;
+    grid-row: 1;
+}
+
+.one-line {
+    white-space: nowrap;
+}
+
+.flexwrapper {
+    display: flex;
+}
+
+.flex-static {
+    flex: 0 0 auto;
+}
+
+.flex-dynamic {
+    flex: 1 1 auto;
+}
+
+.icon {
+    height: 1rem;
+    width: 1rem;
+    margin-left: 0.3rem;
+}
+
+.tooltip .tooltiptext-right {
+    visibility: hidden;
+    position: absolute;
+    z-index: 1;
+    background-color: var(--farbe2);
+    color: var(--farbe1);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.tooltip:hover .tooltiptext-right {
+    visibility: visible;
+}
+
+.checkbox-div {
+    position: relative;
+    cursor: pointer;
+}
+
+/* Standardcheckbox unsichtbar machen und über neue legen */
+.checkbox-div input {
+    position: relative;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+/* neue Checkbox erstellen */
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 1rem;
+    width: 1rem;
+    background-color: var(--hg-farbe);
+    border-radius: 1rem;
+}
+
+/* Farbänderung beim Maushovern */
+.checkbox-div:hover input ~ .checkmark {
+    background-color: var(--farbe2);
+}
+
+/* Farbänderung bei Auswahl */
+.checkbox-div input:checked ~ .checkmark {
+    background-color: var(--akzentfarbe1);
+}
+
+/* Pfeile Zahleninput verstecken */
+input[type=number] {
+    appearance: textfield;
+}
+
+select {
+    appearance: none;
+    background-color: var(--farbe2);
+    color: var(--farbe1);
+    border: none;
+    border-radius: 0.5rem;
+    outline: none;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+}
+
+/* Farbe von ausgewähltem Bereich */
+::selection {
+    background: var(--akzentfarbe1);
+}
+
+input {
+    margin-top: 0.1rem;
+    margin-bottom: 0.1rem;
+    margin-left: 0.1rem;
+    margin-right: 0.1rem;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+}
+
+select {
+    margin-top: 0.1rem;
+    margin-bottom: 0.1rem;
+    margin-left: 0.1rem;
+    margin-right: 0.1rem;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+}
+
+/* Text nach Checkbox */
+.checkbox-text {
+    margin-left: 0.4rem;
+}
+
+.output-grid {
+    display: grid;
+    grid-template-columns: 1fr min-content min-content;
+    grid-gap: 0rem;
+    grid-template-rows: min-content 1fr;
+}
+
+.output-heading-div {
+    grid-column: 1;
+    grid-row: 1
+}
+
+.output-cesium-div {
+    grid-row: 2;
+    grid-column: 1;
+}
+
+#follow-button-div {
+    grid-row: 1;
+    grid-column: 2;
+}
+
+.output-display-mode-div {
+    grid-row: 1;
+    grid-column: 3;
+}
+
+#result-div {
+    grid-row: 2;
+    grid-column-start: 2;
+    grid-column-end: 4;
+    height: 80vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: max-content;
+    line-height: 1.5;
+}
+
+.data-bar {
+    display: inline-block;
+    width: 10rem;
+    height: 1.2rem;
+    background-color: var(--hg-farbe);
+    border-radius: 0.5rem;
+    position: relative;
+}
+
+.bar-share {
+    display: inline-block;
+    position: relative;
+    z-index: 0;
+    height: 1.2rem;
+    background-color: var(--farbe2);
+    border-radius: 0.5rem;
+}
+
+.bar-text {
+    position: absolute;
+    z-index: 1;
+    height: 1.2rem;
+    width: 10rem;
+    text-align: center;
+    margin-left: 0.2rem;
+    margin-right: 0.2rem;
+    line-height: 1;
+}
+
+.accent-text {
+    color: var(--akzentfarbe1);
+}
+
+.result-group {
+    margin-top: 1rem;
+    margin-left: 0;
+    margin-right: 2rem;
+    min-width: max-content; 
+}
+
+.result-ant-ant {
+    margin: 0.5rem;
+    margin-right: 0;
+    min-width: max-content;
+}
+
+#result-list {
+    min-width: max-content;
+    margin-bottom: 2rem;
+}
+
+.result-name {
+    margin-left: 0.2rem;
+    margin-right: 0.2rem;
+}
+
+.additional-information-div {
+    margin: 0.5rem;
+    background-color: var(--hg-farbe);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}

@@ -1,0 +1,3 @@
+Orbitscalc
+Copyright 2021 Hannes Diener
+Licensed under the Apache License, Version 2.0
