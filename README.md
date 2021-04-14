@@ -21,3 +21,8 @@ For detailed information on running a Django project locally see the [Django doc
 If you haven't set up Orbitscalc locally you might be able to use the web app by going to http://surf1sh.pythonanywhere.com/.
 Disclaimer #1: The ground station data there strictly for demonstrational purposes.
 Disclaimer #2: Because the website is hosted using a free service, availability and performance might be limited.
+
+When running Orbitscalc locally, create a superuser, in order to access the database.
+````
+python manage.py createsuperuser
+````
