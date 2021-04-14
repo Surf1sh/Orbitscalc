@@ -1,6 +1,6 @@
 # Orbitscalc: Satellite Data Transmission Analysis
 Orbitscalc is a Django web application that calculates the maximum amount of data that can be sent from a satellite to a number of ground stations over a certain time period.
-This application as been developed as a complex project in highschool. Read the detailed German project documentation [here](https://github.com/Surf1sh/BeLL/blob/master/Dokumentation%20BeLL.pdf). 
+This application as been developed as a complex project in highschool. Read the detailed German project documentation [here](https://github.com/Surf1sh/Orbitscalc/blob/master/Dokumentation%20BeLL.pdf). 
 
 ## Setup
 The following python-packages are needed in order to run this application locally (versions used for development in brackets):
