@@ -26,3 +26,4 @@ When running Orbitscalc locally, create a superuser, in order to access the data
 ````
 python manage.py createsuperuser
 ````
+There currently is no example data in the data base. Go to http://surf1sh.pythonanywhere.com/ to try out the application.
